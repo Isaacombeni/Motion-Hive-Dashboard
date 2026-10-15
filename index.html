@@ -84,6 +84,8 @@
   .tasks label { cursor: pointer; }
   .tasks input:checked + label { color: var(--muted); text-decoration: line-through; }
 
+  .scroll { max-height: 360px; overflow: auto; }
+  .hint { margin: 10px 0 0; font-size: 0.85rem; color: var(--muted); }
   footer { margin-top: 24px; color: var(--muted); font-size: 0.85rem; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 </style>
@@ -113,10 +115,13 @@
 
     <section class="panel" aria-labelledby="inv-h">
       <h2 id="inv-h">Lager</h2>
-      <table>
-        <thead><tr><th>Produkt</th><th class="num">I lager</th><th>Status</th></tr></thead>
-        <tbody id="inventory"></tbody>
-      </table>
+      <div class="scroll">
+        <table>
+          <thead><tr><th>Produkt</th><th class="num">I lager</th><th>Status</th></tr></thead>
+          <tbody id="inventory"></tbody>
+        </table>
+      </div>
+      <p class="hint" id="inv-note"></p>
     </section>
   </div>
 
@@ -125,7 +130,7 @@
     <ul class="tasks" id="tasks"></ul>
   </section>
 
-  <footer>Platshållardata. Byt ut objektet DATA i index.html mot riktig data i nästa steg.</footer>
+  <footer>Lagret läses från lager.csv. Övrigt är fortfarande platshållardata.</footer>
 </div>
 
 <script>
@@ -167,18 +172,68 @@ $("date").textContent = new Date().toLocaleDateString("sv-SE", {
 
 $("briefing").innerHTML = DATA.briefing.map(t => `<p>${t}</p>`).join("");
 
+function renderKpis() {
 $("kpis").innerHTML = DATA.kpis.map(k => `
   <div class="kpi">
     <div class="label">${k.label}</div>
     <div class="value">${k.value}</div>
     <div class="note ${k.trend}">${k.note}</div>
   </div>`).join("");
+}
+renderKpis();
 
 $("campaigns").innerHTML = DATA.campaigns.map(c => `
   <tr><td>${c.name}</td><td><span class="badge ${c.tone}">${c.status}</span></td><td class="num">${c.result}</td></tr>`).join("");
 
-$("inventory").innerHTML = DATA.inventory.map(i => `
-  <tr><td>${i.name}</td><td class="num">${i.qty}</td><td><span class="badge ${i.tone}">${i.status}</span></td></tr>`).join("");
+function renderInventory() {
+  $("inventory").innerHTML = DATA.inventory.map(i => `
+    <tr><td>${i.name}</td><td class="num">${i.qty}</td><td><span class="badge ${i.tone}">${i.status}</span></td></tr>`).join("");
+}
+renderInventory();
+
+// ===== Lager från lager.csv =====
+const num = (v) => parseFloat(String(v ?? "").replace(/\s/g, "").replace(",", ".")) || 0;
+const kr = (n) => Math.round(n).toLocaleString("sv-SE") + " kr";
+
+function parseCSV(text) {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(l => l.trim());
+  const delim = lines[0].includes(";") ? ";" : ",";
+  const split = (l) => l.split(delim).map(c => c.trim().replace(/^"|"$/g, ""));
+  const head = split(lines[0]).map(h => h.toLowerCase());
+  return lines.slice(1).map(l => {
+    const cells = split(l), row = {};
+    head.forEach((h, i) => row[h] = cells[i]);
+    return row;
+  });
+}
+
+async function loadInventory() {
+  try {
+    const res = await fetch("lager.csv", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const items = parseCSV(await res.text()).map(r => {
+      const qty = num(r["antal"]), limit = num(r["gräns"]), cost = num(r["inköpspris"]);
+      let tone = "ok", status = "OK";
+      if (qty <= 0) { tone = "bad"; status = "Slut"; }
+      else if (qty <= limit) { tone = "warn"; status = "Låg"; }
+      return { name: r["produkt"], qty, tone, status, value: qty * cost };
+    });
+    const rank = { bad: 0, warn: 1, ok: 2 };
+    items.sort((a, b) => rank[a.tone] - rank[b.tone]);
+    DATA.inventory = items;
+    const low = items.filter(i => i.tone !== "ok").length;
+    const k = DATA.kpis.find(k => k.label === "Lagervärde");
+    k.value = kr(items.reduce((s, i) => s + i.value, 0));
+    k.note = low ? low + " produkter under gräns" : "Allt över gräns";
+    k.trend = low ? "down" : "up";
+    $("inv-note").textContent = items.length + " produkter inlästa från lager.csv";
+    renderInventory();
+    renderKpis();
+  } catch (e) {
+    $("inv-note").textContent = "Kunde inte läsa lager.csv, visar exempeldata. Öppna sidan via GitHub Pages eller en lokal server.";
+  }
+}
+loadInventory();
 
 $("tasks").innerHTML = DATA.tasks.map((t, n) => `
   <li><input type="checkbox" id="t${n}"><label for="t${n}">${t}</label></li>`).join("");
