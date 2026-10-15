@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motion Hive – Dashboard</title>
+<style>
+  :root {
+    --bg: #f6f5f3;
+    --surface: #ffffff;
+    --ink: #1c1a1f;
+    --muted: #6b6772;
+    --line: #e4e1e6;
+    --accent: #d6336c;
+    --ok: #2f8f5b;
+    --warn: #b7791f;
+    --bad: #c0392b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17151a;
+      --surface: #201d25;
+      --ink: #f1eff3;
+      --muted: #9b96a3;
+      --line: #342f3b;
+      --accent: #f06595;
+      --ok: #5cc48c;
+      --warn: #e0a84a;
+      --bad: #ef7466;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-variant-numeric: tabular-nums;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 56px; }
+  header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+  h1 { font-size: 1.5rem; margin: 0; letter-spacing: -0.01em; }
+  .date { color: var(--muted); font-size: 0.95rem; }
+  h2 { font-size: 1rem; margin: 0 0 12px; }
+
+  .briefing {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 6px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+  }
+  .briefing p { margin: 0 0 8px; max-width: 70ch; }
+  .briefing p:last-child { margin: 0; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+  .kpi .label { color: var(--muted); font-size: 0.9rem; }
+  .kpi .value { font-size: 1.75rem; font-weight: 650; letter-spacing: -0.02em; margin: 2px 0; }
+  .kpi .note { font-size: 0.9rem; color: var(--muted); }
+  .up { color: var(--ok); }
+  .down { color: var(--bad); }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 760px) { .cols { grid-template-columns: 1fr; } }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 18px 20px; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
+  td.num, th.num { text-align: right; }
+  tr:last-child td { border-bottom: 0; }
+
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.8rem; border: 1px solid currentColor; }
+  .badge.ok { color: var(--ok); }
+  .badge.warn { color: var(--warn); }
+  .badge.bad { color: var(--bad); }
+
+  .tasks { list-style: none; margin: 0; padding: 0; }
+  .tasks li { display: flex; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .tasks li:last-child { border-bottom: 0; }
+  .tasks input { accent-color: var(--accent); margin-top: 5px; }
+  .tasks label { cursor: pointer; }
+  .tasks input:checked + label { color: var(--muted); text-decoration: line-through; }
+
+  footer { margin-top: 24px; color: var(--muted); font-size: 0.85rem; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Motion Hive – översikt</h1>
+    <div class="date" id="date"></div>
+  </header>
+
+  <section class="briefing" aria-labelledby="brief-h">
+    <h2 id="brief-h">Dagens briefing</h2>
+    <div id="briefing"></div>
+  </section>
+
+  <section class="kpis" id="kpis" aria-label="Nyckeltal"></section>
+
+  <div class="cols">
+    <section class="panel" aria-labelledby="camp-h">
+      <h2 id="camp-h">Kampanjer</h2>
+      <table>
+        <thead><tr><th>Kampanj</th><th>Status</th><th class="num">Resultat</th></tr></thead>
+        <tbody id="campaigns"></tbody>
+      </table>
+    </section>
+
+    <section class="panel" aria-labelledby="inv-h">
+      <h2 id="inv-h">Lager</h2>
+      <table>
+        <thead><tr><th>Produkt</th><th class="num">I lager</th><th>Status</th></tr></thead>
+        <tbody id="inventory"></tbody>
+      </table>
+    </section>
+  </div>
+
+  <section class="panel" style="margin-top:12px" aria-labelledby="task-h">
+    <h2 id="task-h">Att göra</h2>
+    <ul class="tasks" id="tasks"></ul>
+  </section>
+
+  <footer>Platshållardata. Byt ut objektet DATA i index.html mot riktig data i nästa steg.</footer>
+</div>
+
+<script>
+// ===== All data ligger här. I steg 4 byter vi ut detta mot riktig data. =====
+const DATA = {
+  briefing: [
+    "God morgon! Det här är exempeltext som senare kan genereras av en agent.",
+    "Rosa kampanjen går bra, men två produkter börjar ta slut i lager."
+  ],
+  kpis: [
+    { label: "Försäljning (7 dagar)", value: "48 200 kr", note: "+12 % mot förra veckan", trend: "up" },
+    { label: "Ordrar idag", value: "9", note: "3 väntar på leverans", trend: "" },
+    { label: "Lagervärde", value: "312 000 kr", note: "2 produkter under gräns", trend: "down" },
+    { label: "Aktiva kampanjer", value: "2", note: "Slutar 31 oktober", trend: "" }
+  ],
+  campaigns: [
+    { name: "Rosa kollektionen", status: "Pågår", tone: "ok", result: "126 ordrar" },
+    { name: "Vintage-keps + energidryck", status: "Pågår", tone: "ok", result: "340 deltagare" },
+    { name: "Black Friday", status: "Planerad", tone: "warn", result: "–" }
+  ],
+  inventory: [
+    { name: "Hoodie, svart (M)", qty: 42, tone: "ok", status: "OK" },
+    { name: "Keps, rosa vintage", qty: 11, tone: "warn", status: "Låg" },
+    { name: "T-shirt, vit (L)", qty: 3, tone: "bad", status: "Slut snart" }
+  ],
+  tasks: [
+    "Svara på partnerförfrågningar",
+    "Godkänna utbetalningar till atleter",
+    "Beställa mer av T-shirt, vit (L)"
+  ]
+};
+
+// ===== Rendering =====
+const $ = (id) => document.getElementById(id);
+
+$("date").textContent = new Date().toLocaleDateString("sv-SE", {
+  weekday: "long", day: "numeric", month: "long", year: "numeric"
+});
+
+$("briefing").innerHTML = DATA.briefing.map(t => `<p>${t}</p>`).join("");
+
+$("kpis").innerHTML = DATA.kpis.map(k => `
+  <div class="kpi">
+    <div class="label">${k.label}</div>
+    <div class="value">${k.value}</div>
+    <div class="note ${k.trend}">${k.note}</div>
+  </div>`).join("");
+
+$("campaigns").innerHTML = DATA.campaigns.map(c => `
+  <tr><td>${c.name}</td><td><span class="badge ${c.tone}">${c.status}</span></td><td class="num">${c.result}</td></tr>`).join("");
+
+$("inventory").innerHTML = DATA.inventory.map(i => `
+  <tr><td>${i.name}</td><td class="num">${i.qty}</td><td><span class="badge ${i.tone}">${i.status}</span></td></tr>`).join("");
+
+$("tasks").innerHTML = DATA.tasks.map((t, n) => `
+  <li><input type="checkbox" id="t${n}"><label for="t${n}">${t}</label></li>`).join("");
+</script>
+</body>
+</html>
